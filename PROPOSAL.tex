@@ -1,0 +1,138 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=2.4cm]{geometry}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{accent}{RGB}{30,80,160}
+\newcommand{\statustag}[1]{\textcolor{accent}{\textbf{#1}}}
+
+\setlist{nosep, leftmargin=1.4em}
+
+\title{\textbf{jobwatch} \\ \large A job-postings watcher for international students \\ \normalsize Draft v0.1, request for scope review}
+\author{Alex Tran}
+\date{July 19, 2026}
+
+\begin{document}
+
+\maketitle
+
+\noindent\statustag{Status:} pre-build draft. Nothing is written yet. I am asking for a rating and a scope check before I start.
+
+\section*{Problem}
+
+Summer 2027 internship postings go live across hundreds of company career pages starting August 2026. Today I find them by scrolling job boards and a community GitHub repo, manually, daily. Worse: as an international student (F-1), a large share of postings are citizenship-gated (ITAR, ``US persons only'', ``unable to sponsor''), and I usually discover that only after reading deep into the JD or after applying. Every international friend I have hits the same wall.
+
+\section*{What it is}
+
+A Go service that watches the career boards of a configurable list of companies and posts to a Discord channel when a new Summer 2027 SWE internship appears, with a flag for sponsorship risk. Discord is the entire user interface. There is no web frontend, by design.
+
+\begin{center}
+\begin{minipage}{0.85\textwidth}
+\begin{verbatim}
+Greenhouse / Lever / Ashby public JSON endpoints
+                  |
+      poller (worker pool, rate-limited, scheduled)
+                  |
+      normalizer (3 vendor schemas -> 1 Posting model)
+                  |
+      differ (vs Postgres: new? changed? closed?)
+                  |
+      filter (intern + 2027 + SWE, sponsorship-signal rules)
+                  |
+        +---------+---------+
+        |                   |
+  Discord webhook      REST API (query/search)
+                            |
+              Prometheus + Grafana (postings/hr,
+              fetch latency, parser failures)
+\end{verbatim}
+\end{minipage}
+\end{center}
+
+\section*{Why not just use Simplify or existing job bots}
+
+\begin{enumerate}
+  \item Sponsorship-signal detection. No mainstream tool flags ``this posting smells citizenship-gated'' for F-1 students. That filter is the point.
+  \item Closed-posting diffs. I want to know when a posting disappears, not only when it appears.
+  \item Per-user filters when friends join (keywords, companies, sponsorship strictness).
+  \item Honestly: the point is building it. This is my backend/infra learning project and I will be user \#1 daily from August.
+\end{enumerate}
+
+\section*{Data sources}
+
+Public, documented JSON endpoints only. No scraping, no LinkedIn.
+
+\begin{itemize}
+  \item Greenhouse: \texttt{boards-api.greenhouse.io/v1/boards/\{company\}/jobs}
+  \item Lever: \texttt{api.lever.co/v0/postings/\{company\}}
+  \item Ashby: public posting API
+  \item Company list seeded from community-maintained lists (a few hundred companies)
+\end{itemize}
+
+Known coverage gap: companies on Workday are out of scope for v1 (their API is much uglier).
+
+\section*{Build plan}
+
+Context for scoping: I know C++ and DSA, I am learning Go this week (day plan already set). My IT job and the fall semester start early August, so depth cannot all live at the end.
+
+\begin{center}
+\begin{tabular}{@{}l p{11.2cm}@{}}
+\toprule
+\textbf{Weeks} & \textbf{Milestone} \\
+\midrule
+1 (now) & Learn Go. Day 7 output is v0: poll 10 hardcoded companies, print new postings to stdout \\
+2--3 & Postgres storage, differ, Discord webhook, deployed on a cheap VM (systemd, Nginx, HTTPS) \\
+4 & Sponsorship-signal rules, raw-response caching to disk, seed real company list \\
+5 & Worker pool + rate limiting, scale company list to hundreds (pulled forward on purpose, see risks) \\
+6 & Docker, GitHub Actions auto-deploy \\
+7--8 & Prometheus + Grafana, load test the REST API, fix what breaks \\
+9--10 & Hard part: scale to thousands of companies, or proper full-text search with ranking \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Deadline logic: resume-ready by October 1, 2026, since 2027 applications open August--September.
+
+\section*{Non-goals (v1)}
+
+\begin{itemize}
+  \item No web UI. Discord only. (Personal rule, 9 weeks minimum.)
+  \item No ML for sponsorship detection. Rules and regex only.
+  \item No Workday ingestion.
+  \item No auth or multi-tenancy until friends actually ask to join.
+  \item Not a startup. This is a resume project with one honest user at launch.
+\end{itemize}
+
+\section*{Risks and mitigations}
+
+\begin{itemize}
+  \item Unofficial endpoints can change or throttle. Mitigation: cache every raw API response to disk from day one, so development never blocks on upstream, and parser breakage is replayable.
+  \item Depth is back-loaded and August is busy. Mitigation: worker pool moved forward to week 5, so a truncated project still has interview substance.
+  \item Read-side load is tiny (a few friends). Mitigation: honest phrasing everywhere, ``load tested to X req/s'', never ``handles X req/s of traffic''.
+  \item Crowded genre. Mitigation: the sponsorship filter and diffs are the differentiators, plus the answer in the section above.
+\end{itemize}
+
+\section*{Success criteria}
+
+\begin{enumerate}
+  \item From August, I personally find internships through this tool, not by scrolling.
+  \item It survives 30 minutes of interview grilling: every component has a ``what broke and what I did'' story.
+  \item Deployed, monitored, load tested, README, and I can explain every line.
+\end{enumerate}
+
+\section*{Questions for you (the reviewer)}
+
+\begin{enumerate}
+  \item Scope: does the 10-week table above look realistic for someone starting Go this week, or where would you cut?
+  \item What is missing that would make you say ``now THIS is a real backend project''?
+  \item Is the sponsorship-signal filter enough of a differentiator, or does it need one more sharp feature?
+  \item Which week 9--10 hard part is more impressive to you: scale-out (thousands of companies, worker pool tuning) or search (full-text plus ranking)?
+  \item Anything here you would call resume inflation?
+\end{enumerate}
+
+\end{document}
