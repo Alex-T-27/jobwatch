@@ -1,6 +1,10 @@
-PROPOSAL.aux
-PROPOSAL.log
-PROPOSAL.md
-PROPOSAL.out
+.env
+.remember
+*.exe 
+*.out
+/bin/
+*.aux
+*.log
+
 PROPOSAL.pdf
 PROPOSAL.tex
