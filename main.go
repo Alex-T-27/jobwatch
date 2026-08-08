@@ -67,7 +67,7 @@ func main() {
 
 	fmt.Println(resp.Status)
 
-	// Todo: Fetch one company's job posting and send it to discord
+	// Todo: Fetch one company's job posting and turn it into readable file
 
 	job_url := "https://lifeattiktok.com/search/7669712589169117445?spread=5MWH5CQ"
 	req, err = http.NewRequest(
@@ -106,4 +106,6 @@ func main() {
 			return
 		}
 	}
+
+	// Todo: From readable file, find job data, extract important information, format Discord message, POST to discord
 }
