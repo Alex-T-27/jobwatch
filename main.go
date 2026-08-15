@@ -16,6 +16,18 @@ type Data struct {
 	Content string `json:"content"`
 }
 
+type Job struct {
+	Id               string
+	Title            string
+	Location         string
+	DescriptionPlain string
+	JobUrl           string
+}
+
+type JobList struct {
+	Jobs []Job `json:"jobs"`
+}
+
 func main() {
 	// Loads .env content
 	err := godotenv.Load()
@@ -69,7 +81,8 @@ func main() {
 
 	// Todo: Fetch one company's job posting and turn it into readable file
 
-	job_url := "https://lifeattiktok.com/search/7669712589169117445?spread=5MWH5CQ"
+	TheJob := JobList{}
+	job_url := "https://api.ashbyhq.com/posting-api/job-board/Deepgram"
 	req, err = http.NewRequest(
 		"GET",
 		job_url,
@@ -98,14 +111,18 @@ func main() {
 			return
 		}
 
-		fmt.Println(len(bodyBytes))
-
-		err = os.WriteFile("tiktok.html", bodyBytes, 0644)
+		err = json.Unmarshal(bodyBytes, &TheJob)
 		if err != nil {
 			fmt.Println("Error:", err)
 			return
 		}
+
 	}
 
-	// Todo: From readable file, find job data, extract important information, format Discord message, POST to discord
+	fmt.Println(TheJob)
+
+	//Todo: one Deepgram job appears in discord as readable message.
+	//Fetch -> Decode -> Pick jobs -> Format -> Send
+	//Checkpoint: Be able to print job[0] title to the terminal
+
 }
