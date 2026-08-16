@@ -17,11 +17,11 @@ type Data struct {
 }
 
 type Job struct {
-	Id               string
-	Title            string
-	Location         string
-	DescriptionPlain string
-	JobUrl           string
+	Id       string
+	Title    string
+	Company  string
+	Location string
+	JobUrl   string
 }
 
 type JobList struct {
@@ -38,52 +38,15 @@ func main() {
 	channelID := os.Getenv("CHANNEL_ID")
 	token := os.Getenv("DISCORD_TOKEN")
 
-	// The content
-	body := Data{Content: "I'm fetching TikTok's Job Posting LMAO JAJAJA"}
-
 	// Creates a new client object
 	client := &http.Client{}
 
-	jsonData, err := json.Marshal(body) // Return a []byte @ jsonData
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-	final_content := bytes.NewBuffer(jsonData)
-
-	// The URL to my discord server
-	discord_url := fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages", channelID)
-
-	// Creates a request containing METHOD, URL, CONTENT
-	req, err := http.NewRequest(
-		"POST",
-		discord_url,
-		final_content,
-	)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-
-	// Modify the request's Headers
-	req.Header.Add("Authorization", "Bot "+token)
-	req.Header.Add("Content-Type", "application/json")
-
-	// Tell the Client to response to that request
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	fmt.Println(resp.Status)
-
 	// Todo: Fetch one company's job posting and turn it into readable file
 
-	TheJob := JobList{}
-	job_url := "https://api.ashbyhq.com/posting-api/job-board/Deepgram"
-	req, err = http.NewRequest(
+	job_list := JobList{}
+	company := "Deepgram"
+	job_url := fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", company)
+	req, err := http.NewRequest(
 		"GET",
 		job_url,
 		nil,
@@ -93,7 +56,7 @@ func main() {
 		return
 	}
 
-	resp, err = client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println("Error:", err)
 		return
@@ -111,7 +74,7 @@ func main() {
 			return
 		}
 
-		err = json.Unmarshal(bodyBytes, &TheJob)
+		err = json.Unmarshal(bodyBytes, &job_list)
 		if err != nil {
 			fmt.Println("Error:", err)
 			return
@@ -119,10 +82,60 @@ func main() {
 
 	}
 
-	fmt.Println(TheJob)
-
 	//Todo: one Deepgram job appears in discord as readable message.
 	//Fetch -> Decode -> Pick jobs -> Format -> Send
 	//Checkpoint: Be able to print job[0] title to the terminal
 
+	job := job_list.Jobs[62]
+	//Message content
+	message := fmt.Sprintf("***New Job Found*** \n**%s - %s**\n%s\n%s", job.Title, company, job.Location, job.JobUrl)
+
+	// The content
+	body := Data{Content: message}
+
+	jsonData, err := json.Marshal(body) // Return a []byte @ jsonData
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	final_content := bytes.NewBuffer(jsonData)
+
+	// The URL to my discord server
+	discord_url := fmt.Sprintf("https://discord.com/api/v10/channels/%s/messages", channelID)
+
+	// Creates a request containing METHOD, URL, CONTENT
+	req, err = http.NewRequest(
+		"POST",
+		discord_url,
+		final_content,
+	)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	// Modify the request's Headers
+	req.Header.Add("Authorization", "Bot "+token)
+	req.Header.Add("Content-Type", "application/json")
+
+	// Tell the Client to response to that request
+	resp, err = client.Do(req)
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	fmt.Println(resp.Status)
+
+	if resp.StatusCode != http.StatusOK {
+		bodyError, err := io.ReadAll(resp.Body)
+		if err != nil {
+			fmt.Println("Error:", err)
+			return
+		}
+
+		fmt.Println(string(bodyError))
+
+	}
 }
