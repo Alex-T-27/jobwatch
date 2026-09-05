@@ -61,7 +61,7 @@ func sendToDiscord(message string) error {
 			return err
 		}
 
-		return fmt.Errorf("ashby returned %s: %s", resp.Status, bodyError)
+		return fmt.Errorf("discord returned %s: %s", resp.Status, bodyError)
 
 	}
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -33,4 +34,18 @@ func loadSent(path string) (map[string]bool, error) {
 	}
 
 	return sent, nil
+}
+
+// openSentLog opens path for appending, creating it if it does not exist.
+// The caller owns the file and must close it.
+func openSentLog(path string) (*os.File, error) {
+	return os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+}
+
+// markSent records one job id as sent by appending it to the open log.
+// Written straight to the file with no buffering on purpose: a buffer that
+// never gets flushed is exactly the lost-state failure dedupe exists to stop.
+func markSent(f *os.File, id string) error {
+	_, err := fmt.Fprintln(f, id)
+	return err
 }
