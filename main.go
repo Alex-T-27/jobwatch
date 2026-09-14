@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -135,10 +134,6 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
 	var postings []Posting
 	for _, t := range targets {
 		got, err := fetchJobs(t.Vendor, t.Company)
-		if errors.Is(err, errNotModified) {
-			fmt.Printf("%-11s %-10s unchanged\n", t.Vendor, t.Company)
-			continue
-		}
 		if err != nil {
 			log.Printf("%s/%s failed: %v", t.Vendor, t.Company, err)
 			continue

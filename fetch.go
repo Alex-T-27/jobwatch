@@ -2,17 +2,20 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 )
 
-var errNotModified = errors.New("job board not modified")
+type cachedBoard struct {
+	etag string
+	body []byte
+}
 
-// etagByURL remembers the version of each board returned by its server. It is
-// intentionally in memory: after a restart, one full fetch safely rebuilds it.
-var etagByURL = make(map[string]string)
+// A 304 saves a download, but cached jobs still need processing: Discord may
+// have failed or the previous cycle may have reached its send cap.
+// The poller is sequential; concurrent fetching would need synchronization.
+var boardsByURL = make(map[string]cachedBoard)
 
 // fetchJobs picks the adapter for a vendor and hands back postings that are
 // already normalized. Adding a vendor means one case here plus one pair of
@@ -38,7 +41,7 @@ func getJSON(url string, target any) error {
 	if err != nil {
 		return err
 	}
-	if etag := etagByURL[url]; etag != "" {
+	if etag := boardsByURL[url].etag; etag != "" {
 		req.Header.Set("If-None-Match", etag)
 	}
 
@@ -54,7 +57,11 @@ func getJSON(url string, target any) error {
 	}
 
 	if resp.StatusCode == http.StatusNotModified {
-		return errNotModified
+		cached, ok := boardsByURL[url]
+		if !ok {
+			return fmt.Errorf("%s returned 304 without a cached board", url)
+		}
+		return json.Unmarshal(cached.body, target)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -67,9 +74,7 @@ func getJSON(url string, target any) error {
 
 	// Store the new version only after its body decoded successfully. Otherwise,
 	// a bad response could be cached and skipped on every later poll.
-	if etag := resp.Header.Get("ETag"); etag != "" {
-		etagByURL[url] = etag
-	}
+	boardsByURL[url] = cachedBoard{etag: resp.Header.Get("ETag"), body: body}
 
 	return nil
 }
