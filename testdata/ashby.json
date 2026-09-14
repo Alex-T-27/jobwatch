@@ -5,7 +5,10 @@
       "title": "Software Engineer Intern",
       "location": "Remote",
       "jobUrl": "https://example.com/jobs/job-123",
-      "descriptionPlain": "Candidates must be able to work without current or future sponsorship."
+      "descriptionPlain": "Candidates will build backend services. They must be able to work without current or future sponsorship.",
+      "department": "Engineering",
+      "team": "Platform",
+      "employmentType": "Intern"
     }
   ]
 }

@@ -2,30 +2,77 @@ package main
 
 import "testing"
 
-func TestIsSoftwareRole(t *testing.T) {
+func TestAssessRole(t *testing.T) {
 	tests := []struct {
-		title string
-		want  bool
+		name    string
+		posting Posting
+		want    roleDecision
 	}{
-		{title: "Software Engineering Intern", want: true},
-		{title: "Backend Engineer Intern", want: true},
-		{title: "Platform Engineering Intern", want: true},
-		{title: "Site Reliability Engineer Intern", want: true},
-		{title: "SRE Intern", want: true},
-		{title: "DevOps Co-op", want: true},
-		{title: "Cloud Engineering Intern", want: true},
-		{title: "Full-Stack Intern", want: true},
-		{title: "Marketing Intern", want: false},
-		{title: "Finance Intern", want: false},
-		{title: "Product Management Intern", want: false},
-		{title: "Developer Relations Intern", want: false},
+		{
+			name:    "software title",
+			posting: Posting{Title: "Software Engineering Intern"},
+			want:    roleMatch,
+		},
+		{
+			name: "vague title confirmed by metadata and description",
+			posting: Posting{
+				Title:       "Summer Intern",
+				Department:  "Engineering",
+				Team:        "Platform",
+				Description: "You will build backend services and REST APIs.",
+			},
+			want: roleMatch,
+		},
+		{
+			name: "employment type supplies internship signal",
+			posting: Posting{
+				Title:          "Technology Analyst",
+				EmploymentType: "Intern",
+				Department:     "Engineering",
+				Description:    "You will write production code for backend services.",
+			},
+			want: roleMatch,
+		},
+		{
+			name: "description only goes to review",
+			posting: Posting{
+				Title:       "Technology Intern",
+				Description: "You will implement REST APIs.",
+			},
+			want: roleReview,
+		},
+		{
+			name: "vague internship goes to review",
+			posting: Posting{
+				Title: "Summer Intern",
+			},
+			want: roleReview,
+		},
+		{
+			name:    "marketing internship",
+			posting: Posting{Title: "Marketing Intern"},
+			want:    roleIgnore,
+		},
+		{
+			name: "non-software department",
+			posting: Posting{
+				Title:      "Summer Intern",
+				Department: "Finance",
+			},
+			want: roleIgnore,
+		},
+		{
+			name:    "full-time software role",
+			posting: Posting{Title: "Backend Engineer", EmploymentType: "FullTime"},
+			want:    roleIgnore,
+		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.title, func(t *testing.T) {
-			got := isSoftwareRole(Posting{Title: tt.title})
-			if got != tt.want {
-				t.Errorf("got %t, want %t", got, tt.want)
+		t.Run(tt.name, func(t *testing.T) {
+			got := assessRole(tt.posting)
+			if got.Decision != tt.want {
+				t.Errorf("got decision %q, want %q", got.Decision, tt.want)
 			}
 		})
 	}

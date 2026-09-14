@@ -20,20 +20,96 @@ var softwareRolePatterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)\bfull[- ]?stack\b`),
 }
 
-// Internship and software-role filters use the title as the high-signal field.
-// Keeping non-matches out of sent.txt lets a posting through later if its title
-// changes to match either filter.
-func isInternship(p Posting) bool {
-	return internshipTitlePattern.MatchString(p.Title)
+var softwareMetadataPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\bsoftware\b`),
+	regexp.MustCompile(`(?i)\bengineering\b`),
+	regexp.MustCompile(`(?i)\bbackend\b`),
+	regexp.MustCompile(`(?i)\binfrastructure\b`),
+	regexp.MustCompile(`(?i)\bplatform\b`),
+	regexp.MustCompile(`(?i)\bsite\s+reliability\b`),
+	regexp.MustCompile(`(?i)\bDevOps\b`),
+	regexp.MustCompile(`(?i)\bcloud\b`),
+	regexp.MustCompile(`(?i)\btechnology\b`),
 }
 
-func isSoftwareRole(p Posting) bool {
-	for _, pattern := range softwareRolePatterns {
-		if pattern.MatchString(p.Title) {
+var softwareDescriptionPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\b(?:write|writing|develop|developing|design|designing|implement|implementing|build|building|maintain|maintaining)\s+(?:\w+\s+){0,5}(?:code|software|backends?|APIs?|services?|applications?)\b`),
+	regexp.MustCompile(`(?i)\bsoftware\s+(?:development|engineering)\b`),
+	regexp.MustCompile(`(?i)\b(?:distributed\s+systems?|microservices?|REST(?:ful)?\s+APIs?)\b`),
+	regexp.MustCompile(`(?i)\b(?:programming|coding)\s+(?:experience|skills?|languages?)\b`),
+}
+
+var nonSoftwareRolePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\b(?:marketing|sales|finance|accounting|legal|recruiting)\b`),
+	regexp.MustCompile(`(?i)\b(?:human\s+resources|people\s+operations|customer\s+success)\b`),
+	regexp.MustCompile(`(?i)\bproduct\s+(?:manager|management)\b`),
+	regexp.MustCompile(`(?i)\b(?:graphic|product|UX|UI)\s+design(?:er)?\b`),
+	regexp.MustCompile(`(?i)\bdeveloper\s+relations\b`),
+	regexp.MustCompile(`(?i)\b(?:hardware|mechanical|electrical|civil|chemical|manufacturing)\s+engineering\b`),
+}
+
+func isInternship(p Posting) bool {
+	return internshipTitlePattern.MatchString(p.Title) ||
+		internshipTitlePattern.MatchString(p.EmploymentType)
+}
+
+type roleDecision string
+
+const (
+	roleIgnore roleDecision = "ignore"
+	roleReview roleDecision = "review"
+	roleMatch  roleDecision = "match"
+)
+
+type roleAssessment struct {
+	Decision roleDecision
+	Reason   string
+}
+
+func matchesAny(value string, patterns []*regexp.Regexp) bool {
+	for _, pattern := range patterns {
+		if pattern.MatchString(value) {
 			return true
 		}
 	}
 	return false
+}
+
+func assessRole(p Posting) roleAssessment {
+	if !isInternship(p) {
+		return roleAssessment{Decision: roleIgnore, Reason: "no internship signal"}
+	}
+
+	if matchesAny(p.Title, softwareRolePatterns) {
+		return roleAssessment{Decision: roleMatch, Reason: "software signal in the title"}
+	}
+
+	if matchesAny(p.Title, nonSoftwareRolePatterns) {
+		return roleAssessment{Decision: roleIgnore, Reason: "title indicates a non-software role"}
+	}
+
+	metadata := p.Department + " " + p.Team
+	softwareMetadata := matchesAny(metadata, softwareMetadataPatterns)
+	nonSoftwareMetadata := matchesAny(metadata, nonSoftwareRolePatterns)
+	softwareDescription := matchesAny(p.Description, softwareDescriptionPatterns)
+
+	if nonSoftwareMetadata {
+		return roleAssessment{Decision: roleIgnore, Reason: "department or team indicates a non-software role"}
+	}
+
+	if softwareMetadata && softwareDescription {
+		return roleAssessment{Decision: roleMatch, Reason: "engineering metadata and software work in the description"}
+	}
+
+	if softwareMetadata {
+		return roleAssessment{Decision: roleReview, Reason: "engineering metadata, but the description is inconclusive"}
+	}
+
+	if softwareDescription {
+		return roleAssessment{Decision: roleReview, Reason: "software work appears only in the description"}
+	}
+
+	return roleAssessment{Decision: roleReview, Reason: "internship title is too vague to classify safely"}
 }
 
 type sponsorshipAssessment struct {

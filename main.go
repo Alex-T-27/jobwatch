@@ -21,13 +21,16 @@ type Data struct {
 // Posting is the one shape the rest of the program works in. Vendor JSON is
 // converted into this inside vendors.go and nowhere else.
 type Posting struct {
-	Vendor      string
-	Company     string
-	Id          string
-	Title       string
-	Location    string
-	Url         string
-	Description string
+	Vendor         string
+	Company        string
+	Id             string
+	Title          string
+	Location       string
+	Url            string
+	Description    string
+	Department     string
+	Team           string
+	EmploymentType string
 }
 
 // Key namespaces an id by where it came from. Two Greenhouse companies can hand
@@ -53,20 +56,27 @@ const maxPerRun = 5
 // How often a running JobWatch process checks every configured board.
 const pollInterval = time.Minute
 
-func formatPosting(p Posting) string {
+func formatPosting(p Posting, role roleAssessment) string {
 	assessment := assessSponsorship(p.Description)
 	sponsorship := "❓ **Sponsorship:** unknown"
 	if assessment.LikelyBlocked {
 		sponsorship = fmt.Sprintf(
-			"⚠️ **Sponsorship risk:** likely blocked\n**Reason:** %s",
+			"⚠️ **Sponsorship risk:** likely blocked\n**Sponsorship reason:** %s",
 			assessment.Reason,
 		)
 	}
 
-	message := fmt.Sprintf("***New Job Found*** \n**%s - %s**\n%s\n%s\n%s",
+	roleLabel := "✅ **Role match:** software"
+	if role.Decision == roleReview {
+		roleLabel = "🔎 **Role match:** review"
+	}
+
+	message := fmt.Sprintf("***New Job Found*** \n**%s - %s**\n%s\n%s\n**Role evidence:** %s\n%s\n%s",
 		p.Title,
 		p.Company,
 		p.Location,
+		roleLabel,
+		role.Reason,
 		sponsorship,
 		p.Url,
 	)
@@ -140,6 +150,7 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
 	newFound := 0
 	internshipMatches := 0
 	softwareMatches := 0
+	reviewMatches := 0
 	sentThisRun := 0
 	stopped := false
 
@@ -149,10 +160,15 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
 		}
 		internshipMatches++
 
-		if !isSoftwareRole(p) {
+		role := assessRole(p)
+		if role.Decision == roleIgnore {
 			continue
 		}
-		softwareMatches++
+		if role.Decision == roleMatch {
+			softwareMatches++
+		} else {
+			reviewMatches++
+		}
 
 		key := p.Key()
 		if sent[key] {
@@ -171,7 +187,7 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
 			time.Sleep(time.Second)
 		}
 
-		if err := sendToDiscord(formatPosting(p)); err != nil {
+		if err := sendToDiscord(formatPosting(p, role)); err != nil {
 			log.Printf("send failed on %s, stopping this run: %v", key, err)
 			stopped = true
 			continue
@@ -186,6 +202,6 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
 		sentThisRun++
 	}
 
-	fmt.Printf("fetched %d, internship matches %d, software matches %d, new %d, sent this run %d, left %d\n",
-		len(postings), internshipMatches, softwareMatches, newFound, sentThisRun, newFound-sentThisRun)
+	fmt.Printf("fetched %d, internship matches %d, software matches %d, review %d, new %d, sent this run %d, left %d\n",
+		len(postings), internshipMatches, softwareMatches, reviewMatches, newFound, sentThisRun, newFound-sentThisRun)
 }

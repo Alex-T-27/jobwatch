@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // Every vendor gets a private struct matching its JSON exactly, plus a function
@@ -21,6 +22,9 @@ type ashbyJob struct {
 	Location         string `json:"location"`
 	JobUrl           string `json:"jobUrl"`
 	DescriptionPlain string `json:"descriptionPlain"`
+	Department       string `json:"department"`
+	Team             string `json:"team"`
+	EmploymentType   string `json:"employmentType"`
 }
 
 func fetchAshby(company string) ([]Posting, error) {
@@ -41,13 +45,16 @@ func fetchAshbyFromURL(company, url string) ([]Posting, error) {
 	postings := make([]Posting, 0, len(board.Jobs))
 	for _, j := range board.Jobs {
 		postings = append(postings, Posting{
-			Vendor:      "ashby",
-			Company:     company,
-			Id:          j.Id,
-			Title:       j.Title,
-			Location:    j.Location,
-			Url:         j.JobUrl,
-			Description: j.DescriptionPlain,
+			Vendor:         "ashby",
+			Company:        company,
+			Id:             j.Id,
+			Title:          j.Title,
+			Location:       j.Location,
+			Url:            j.JobUrl,
+			Description:    j.DescriptionPlain,
+			Department:     j.Department,
+			Team:           j.Team,
+			EmploymentType: j.EmploymentType,
 		})
 	}
 	return postings, nil
@@ -62,9 +69,12 @@ type greenhouseBoard struct {
 // Id is a number here, not a string, and location is an object rather than a
 // plain field. Both are the reason a shared struct with json tags cannot work.
 type greenhouseJob struct {
-	Id       int64  `json:"id"`
-	Title    string `json:"title"`
-	Content  string `json:"content"`
+	Id          int64  `json:"id"`
+	Title       string `json:"title"`
+	Content     string `json:"content"`
+	Departments []struct {
+		Name string `json:"name"`
+	} `json:"departments"`
 	Location struct {
 		Name string `json:"name"`
 	} `json:"location"`
@@ -81,6 +91,11 @@ func fetchGreenhouse(company string) ([]Posting, error) {
 
 	postings := make([]Posting, 0, len(board.Jobs))
 	for _, j := range board.Jobs {
+		departments := make([]string, 0, len(j.Departments))
+		for _, department := range j.Departments {
+			departments = append(departments, department.Name)
+		}
+
 		postings = append(postings, Posting{
 			Vendor:      "greenhouse",
 			Company:     company,
@@ -89,6 +104,7 @@ func fetchGreenhouse(company string) ([]Posting, error) {
 			Location:    j.Location.Name,
 			Url:         j.AbsoluteUrl,
 			Description: plainText(j.Content),
+			Department:  strings.Join(departments, ", "),
 		})
 	}
 	return postings, nil
@@ -105,7 +121,10 @@ type leverJob struct {
 	HostedUrl        string `json:"hostedUrl"`
 	DescriptionPlain string `json:"descriptionPlain"`
 	Categories       struct {
-		Location string `json:"location"`
+		Location   string `json:"location"`
+		Team       string `json:"team"`
+		Department string `json:"department"`
+		Commitment string `json:"commitment"`
 	} `json:"categories"`
 }
 
@@ -120,13 +139,16 @@ func fetchLever(company string) ([]Posting, error) {
 	postings := make([]Posting, 0, len(jobs))
 	for _, j := range jobs {
 		postings = append(postings, Posting{
-			Vendor:      "lever",
-			Company:     company,
-			Id:          j.Id,
-			Title:       j.Text,
-			Location:    j.Categories.Location,
-			Url:         j.HostedUrl,
-			Description: j.DescriptionPlain,
+			Vendor:         "lever",
+			Company:        company,
+			Id:             j.Id,
+			Title:          j.Text,
+			Location:       j.Categories.Location,
+			Url:            j.HostedUrl,
+			Description:    j.DescriptionPlain,
+			Department:     j.Categories.Department,
+			Team:           j.Categories.Team,
+			EmploymentType: j.Categories.Commitment,
 		})
 	}
 	return postings, nil

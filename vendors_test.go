@@ -32,13 +32,16 @@ func TestFetchAshby(t *testing.T) {
 	}
 
 	want := Posting{
-		Vendor:      "ashby",
-		Company:     "Deepgram",
-		Id:          "job-123",
-		Title:       "Software Engineer Intern",
-		Location:    "Remote",
-		Url:         "https://example.com/jobs/job-123",
-		Description: "Candidates must be able to work without current or future sponsorship.",
+		Vendor:         "ashby",
+		Company:        "Deepgram",
+		Id:             "job-123",
+		Title:          "Software Engineer Intern",
+		Location:       "Remote",
+		Url:            "https://example.com/jobs/job-123",
+		Description:    "Candidates will build backend services. They must be able to work without current or future sponsorship.",
+		Department:     "Engineering",
+		Team:           "Platform",
+		EmploymentType: "Intern",
 	}
 
 	if postings[0] != want {
