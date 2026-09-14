@@ -1,14 +1,12 @@
 .env
-.remember
-*.exe 
+.remember/
+*.exe
 *.out
-/bin/
 *.aux
 *.log
+/bin/
 
-PROPOSAL.pdf
-PROPOSAL.tex
-job-tracker
-linkedin.html
-tiktok.html
-sent.txt
+/job-tracker
+/sent.txt
+/docs/
+/AGENTS.md
