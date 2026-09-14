@@ -23,8 +23,15 @@ type ashbyJob struct {
 }
 
 func fetchAshby(company string) ([]Posting, error) {
-	url := fmt.Sprintf("https://api.ashbyhq.com/posting-api/job-board/%s", company)
+	url := fmt.Sprintf(
+		"https://api.ashbyhq.com/posting-api/job-board/%s",
+		company,
+	)
 
+	return fetchAshbyFromURL(company, url)
+}
+
+func fetchAshbyFromURL(company, url string) ([]Posting, error) {
 	var board ashbyBoard
 	if err := getJSON(url, &board); err != nil {
 		return nil, err

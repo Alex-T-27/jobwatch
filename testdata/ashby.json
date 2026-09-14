@@ -1,0 +1,10 @@
+{
+  "jobs": [
+    {
+      "id": "job-123",
+      "title": "Software Engineer Intern",
+      "location": "Remote",
+      "jobUrl": "https://example.com/jobs/job-123"
+    }
+  ]
+}
