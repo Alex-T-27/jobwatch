@@ -1,0 +1,7 @@
+{
+  "targets": [
+    {"vendor": "ashby", "company": "Deepgram"},
+    {"vendor": "greenhouse", "company": "stripe"},
+    {"vendor": "lever", "company": "spotify"}
+  ]
+}

@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -31,27 +36,21 @@ func (p Posting) Key() string {
 	return fmt.Sprintf("%s:%s:%s", p.Vendor, p.Company, p.Id)
 }
 
-// target is one board to poll. Hardcoded for now, moves to a config file later.
-type target struct {
-	vendor  string
-	company string
-}
-
-var targets = []target{
-	{"ashby", "Deepgram"},
-	{"greenhouse", "stripe"},
-	{"lever", "spotify"},
-}
-
 // Creates a new client object
 var client = &http.Client{}
 
 // Where the keys of postings already sent to Discord are recorded
 const sentPath = "sent.txt"
 
+// Where the list of company boards to poll is configured.
+const targetsPath = "companies.json"
+
 // How many postings one run is allowed to send. Keeps a first run, which sees
 // every posting as new, from firing hundreds of messages at Discord at once.
 const maxPerRun = 5
+
+// How often a running JobWatch process checks every configured board.
+const pollInterval = time.Minute
 
 func formatPosting(p Posting) string {
 	//Message content
@@ -71,16 +70,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// One board failing should not cost us the other two.
-	var postings []Posting
-	for _, t := range targets {
-		got, err := fetchJobs(t.vendor, t.company)
-		if err != nil {
-			log.Printf("%s/%s failed: %v", t.vendor, t.company, err)
-			continue
-		}
-		fmt.Printf("%-11s %-10s %4d postings\n", t.vendor, t.company, len(got))
-		postings = append(postings, got...)
+	targets, err := loadTargets(targetsPath)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	sent, err := loadSent(sentPath)
@@ -94,11 +86,58 @@ func main() {
 	}
 	defer sentLog.Close()
 
+	ctx, stop := signal.NotifyContext(
+		context.Background(),
+		os.Interrupt,
+		syscall.SIGTERM,
+	)
+	defer stop()
+
+	// Check immediately on startup, then keep checking until the process is
+	// asked to stop. A single loop prevents two polling runs from overlapping.
+	for {
+		runOnce(targets, sent, sentLog)
+
+		log.Printf("next check in %s", pollInterval)
+		timer := time.NewTimer(pollInterval)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			log.Print("shutdown requested, exiting")
+			return
+		}
+	}
+}
+
+func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
+	// One board failing should not cost us the other two.
+	var postings []Posting
+	for _, t := range targets {
+		got, err := fetchJobs(t.Vendor, t.Company)
+		if errors.Is(err, errNotModified) {
+			fmt.Printf("%-11s %-10s unchanged\n", t.Vendor, t.Company)
+			continue
+		}
+		if err != nil {
+			log.Printf("%s/%s failed: %v", t.Vendor, t.Company, err)
+			continue
+		}
+		fmt.Printf("%-11s %-10s %4d postings\n", t.Vendor, t.Company, len(got))
+		postings = append(postings, got...)
+	}
+
 	newFound := 0
+	matching := 0
 	sentThisRun := 0
 	stopped := false
 
 	for _, p := range postings {
+		if !isInternship(p) {
+			continue
+		}
+		matching++
+
 		key := p.Key()
 		if sent[key] {
 			continue
@@ -131,6 +170,6 @@ func main() {
 		sentThisRun++
 	}
 
-	fmt.Printf("fetched %d, new %d, sent this run %d, left %d\n",
-		len(postings), newFound, sentThisRun, newFound-sentThisRun)
+	fmt.Printf("fetched %d, internship matches %d, new %d, sent this run %d, left %d\n",
+		len(postings), matching, newFound, sentThisRun, newFound-sentThisRun)
 }

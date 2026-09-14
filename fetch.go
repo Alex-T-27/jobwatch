@@ -2,10 +2,17 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 )
+
+var errNotModified = errors.New("job board not modified")
+
+// etagByURL remembers the version of each board returned by its server. It is
+// intentionally in memory: after a restart, one full fetch safely rebuilds it.
+var etagByURL = make(map[string]string)
 
 // fetchJobs picks the adapter for a vendor and hands back postings that are
 // already normalized. Adding a vendor means one case here plus one pair of
@@ -31,6 +38,9 @@ func getJSON(url string, target any) error {
 	if err != nil {
 		return err
 	}
+	if etag := etagByURL[url]; etag != "" {
+		req.Header.Set("If-None-Match", etag)
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -43,9 +53,23 @@ func getJSON(url string, target any) error {
 		return err
 	}
 
+	if resp.StatusCode == http.StatusNotModified {
+		return errNotModified
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s returned %s: %s", url, resp.Status, body)
 	}
 
-	return json.Unmarshal(body, target)
+	if err := json.Unmarshal(body, target); err != nil {
+		return err
+	}
+
+	// Store the new version only after its body decoded successfully. Otherwise,
+	// a bad response could be cached and skipped on every later poll.
+	if etag := resp.Header.Get("ETag"); etag != "" {
+		etagByURL[url] = etag
+	}
+
+	return nil
 }
