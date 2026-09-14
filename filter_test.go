@@ -2,6 +2,35 @@ package main
 
 import "testing"
 
+func TestIsSoftwareRole(t *testing.T) {
+	tests := []struct {
+		title string
+		want  bool
+	}{
+		{title: "Software Engineering Intern", want: true},
+		{title: "Backend Engineer Intern", want: true},
+		{title: "Platform Engineering Intern", want: true},
+		{title: "Site Reliability Engineer Intern", want: true},
+		{title: "SRE Intern", want: true},
+		{title: "DevOps Co-op", want: true},
+		{title: "Cloud Engineering Intern", want: true},
+		{title: "Full-Stack Intern", want: true},
+		{title: "Marketing Intern", want: false},
+		{title: "Finance Intern", want: false},
+		{title: "Product Management Intern", want: false},
+		{title: "Developer Relations Intern", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			got := isSoftwareRole(Posting{Title: tt.title})
+			if got != tt.want {
+				t.Errorf("got %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAssessSponsorship(t *testing.T) {
 	tests := []struct {
 		name          string

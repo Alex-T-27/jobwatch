@@ -8,11 +8,32 @@ import (
 
 var internshipTitlePattern = regexp.MustCompile(`(?i)\b(intern(ship)?|co[- ]?op)\b`)
 
-// isInternship uses the title because descriptions are not part of Posting yet.
+var softwareRolePatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)\bsoftware\s+(?:engineer(?:ing)?|developer|development)\b`),
+	regexp.MustCompile(`(?i)\b(?:backend|back-end)\b`),
+	regexp.MustCompile(`(?i)\binfrastructure\b`),
+	regexp.MustCompile(`(?i)\bplatform\s+(?:engineer(?:ing)?|developer|development)\b`),
+	regexp.MustCompile(`(?i)\bsite\s+reliability\b`),
+	regexp.MustCompile(`(?i)\bSRE\b`),
+	regexp.MustCompile(`(?i)\bDevOps\b`),
+	regexp.MustCompile(`(?i)\bcloud\s+(?:engineer(?:ing)?|developer|development)\b`),
+	regexp.MustCompile(`(?i)\bfull[- ]?stack\b`),
+}
+
+// Internship and software-role filters use the title as the high-signal field.
 // Keeping non-matches out of sent.txt lets a posting through later if its title
-// changes to match the filter.
+// changes to match either filter.
 func isInternship(p Posting) bool {
 	return internshipTitlePattern.MatchString(p.Title)
+}
+
+func isSoftwareRole(p Posting) bool {
+	for _, pattern := range softwareRolePatterns {
+		if pattern.MatchString(p.Title) {
+			return true
+		}
+	}
+	return false
 }
 
 type sponsorshipAssessment struct {

@@ -138,7 +138,8 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
 	}
 
 	newFound := 0
-	matching := 0
+	internshipMatches := 0
+	softwareMatches := 0
 	sentThisRun := 0
 	stopped := false
 
@@ -146,7 +147,12 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
 		if !isInternship(p) {
 			continue
 		}
-		matching++
+		internshipMatches++
+
+		if !isSoftwareRole(p) {
+			continue
+		}
+		softwareMatches++
 
 		key := p.Key()
 		if sent[key] {
@@ -180,6 +186,6 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
 		sentThisRun++
 	}
 
-	fmt.Printf("fetched %d, internship matches %d, new %d, sent this run %d, left %d\n",
-		len(postings), matching, newFound, sentThisRun, newFound-sentThisRun)
+	fmt.Printf("fetched %d, internship matches %d, software matches %d, new %d, sent this run %d, left %d\n",
+		len(postings), internshipMatches, softwareMatches, newFound, sentThisRun, newFound-sentThisRun)
 }
