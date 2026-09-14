@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -39,8 +40,8 @@ func (p Posting) Key() string {
 	return fmt.Sprintf("%s:%s:%s", p.Vendor, p.Company, p.Id)
 }
 
-// Creates a new client object
-var client = &http.Client{}
+// A stalled board must not hold up every later board indefinitely.
+var client = &http.Client{Timeout: 30 * time.Second}
 
 // Where the keys of postings already sent to Discord are recorded
 const sentPath = "sent.txt"
@@ -83,10 +84,13 @@ func formatPosting(p Posting, role roleAssessment) string {
 }
 
 func main() {
-	// Loads .env content
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal(err)
+	once := flag.Bool("once", false, "check boards once and exit")
+	dryRun := flag.Bool("dry-run", false, "preview one cycle without sending or recording jobs")
+	flag.Parse()
+	if !*dryRun {
+		if err := godotenv.Load(); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	targets, err := loadTargets(targetsPath)
@@ -99,11 +103,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	sentLog, err := openSentLog(sentPath)
-	if err != nil {
-		log.Fatal(err)
+	var sentLog *os.File
+	if !*dryRun {
+		sentLog, err = openSentLog(sentPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer sentLog.Close()
 	}
-	defer sentLog.Close()
 
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
@@ -115,7 +122,10 @@ func main() {
 	// Check immediately on startup, then keep checking until the process is
 	// asked to stop. A single loop prevents two polling runs from overlapping.
 	for {
-		runOnce(targets, sent, sentLog)
+		runOnce(targets, sent, sentLog, *dryRun)
+		if *once || *dryRun || ctx.Err() != nil {
+			return
+		}
 
 		log.Printf("next check in %s", pollInterval)
 		timer := time.NewTimer(pollInterval)
@@ -129,7 +139,7 @@ func main() {
 	}
 }
 
-func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
+func runOnce(targets []target, sent map[string]bool, sentLog *os.File, dryRun bool) {
 	// One board failing should not cost us the other two.
 	var postings []Posting
 	for _, t := range targets {
@@ -156,6 +166,9 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
 		internshipMatches++
 
 		role := assessRole(p)
+		if dryRun {
+			fmt.Printf("[%s] %s / %s | %s | %s\n", role.Decision, p.Company, p.Title, p.Location, role.Reason)
+		}
 		if role.Decision == roleIgnore {
 			continue
 		}
@@ -170,6 +183,9 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File) {
 			continue
 		}
 		newFound++
+		if dryRun {
+			continue
+		}
 
 		// Keep counting the rest so the summary is honest, but send no more.
 		if stopped || sentThisRun >= maxPerRun {

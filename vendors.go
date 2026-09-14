@@ -120,7 +120,12 @@ type leverJob struct {
 	Text             string `json:"text"`
 	HostedUrl        string `json:"hostedUrl"`
 	DescriptionPlain string `json:"descriptionPlain"`
-	Categories       struct {
+	AdditionalPlain  string `json:"additionalPlain"`
+	Lists            []struct {
+		Text    string `json:"text"`
+		Content string `json:"content"`
+	} `json:"lists"`
+	Categories struct {
 		Location   string `json:"location"`
 		Team       string `json:"team"`
 		Department string `json:"department"`
@@ -138,6 +143,12 @@ func fetchLever(company string) ([]Posting, error) {
 
 	postings := make([]Posting, 0, len(jobs))
 	for _, j := range jobs {
+		// Lever keeps responsibilities and requirements outside descriptionPlain.
+		parts := []string{j.DescriptionPlain}
+		for _, section := range j.Lists {
+			parts = append(parts, section.Text, plainText(section.Content))
+		}
+		parts = append(parts, j.AdditionalPlain)
 		postings = append(postings, Posting{
 			Vendor:         "lever",
 			Company:        company,
@@ -145,7 +156,7 @@ func fetchLever(company string) ([]Posting, error) {
 			Title:          j.Text,
 			Location:       j.Categories.Location,
 			Url:            j.HostedUrl,
-			Description:    j.DescriptionPlain,
+			Description:    strings.Join(parts, "\n"),
 			Department:     j.Categories.Department,
 			Team:           j.Categories.Team,
 			EmploymentType: j.Categories.Commitment,

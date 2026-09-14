@@ -9,9 +9,9 @@ func TestAssessRole(t *testing.T) {
 		want    roleDecision
 	}{
 		{
-			name:    "software title",
+			name:    "software title without JD needs review",
 			posting: Posting{Title: "Software Engineering Intern"},
-			want:    roleMatch,
+			want:    roleReview,
 		},
 		{
 			name: "vague title confirmed by metadata and description",
