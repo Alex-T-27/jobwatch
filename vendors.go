@@ -16,10 +16,11 @@ type ashbyBoard struct {
 }
 
 type ashbyJob struct {
-	Id       string `json:"id"`
-	Title    string `json:"title"`
-	Location string `json:"location"`
-	JobUrl   string `json:"jobUrl"`
+	Id               string `json:"id"`
+	Title            string `json:"title"`
+	Location         string `json:"location"`
+	JobUrl           string `json:"jobUrl"`
+	DescriptionPlain string `json:"descriptionPlain"`
 }
 
 func fetchAshby(company string) ([]Posting, error) {
@@ -40,12 +41,13 @@ func fetchAshbyFromURL(company, url string) ([]Posting, error) {
 	postings := make([]Posting, 0, len(board.Jobs))
 	for _, j := range board.Jobs {
 		postings = append(postings, Posting{
-			Vendor:   "ashby",
-			Company:  company,
-			Id:       j.Id,
-			Title:    j.Title,
-			Location: j.Location,
-			Url:      j.JobUrl,
+			Vendor:      "ashby",
+			Company:     company,
+			Id:          j.Id,
+			Title:       j.Title,
+			Location:    j.Location,
+			Url:         j.JobUrl,
+			Description: j.DescriptionPlain,
 		})
 	}
 	return postings, nil
@@ -62,6 +64,7 @@ type greenhouseBoard struct {
 type greenhouseJob struct {
 	Id       int64  `json:"id"`
 	Title    string `json:"title"`
+	Content  string `json:"content"`
 	Location struct {
 		Name string `json:"name"`
 	} `json:"location"`
@@ -69,7 +72,7 @@ type greenhouseJob struct {
 }
 
 func fetchGreenhouse(company string) ([]Posting, error) {
-	url := fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs", company)
+	url := fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true", company)
 
 	var board greenhouseBoard
 	if err := getJSON(url, &board); err != nil {
@@ -79,12 +82,13 @@ func fetchGreenhouse(company string) ([]Posting, error) {
 	postings := make([]Posting, 0, len(board.Jobs))
 	for _, j := range board.Jobs {
 		postings = append(postings, Posting{
-			Vendor:   "greenhouse",
-			Company:  company,
-			Id:       strconv.FormatInt(j.Id, 10),
-			Title:    j.Title,
-			Location: j.Location.Name,
-			Url:      j.AbsoluteUrl,
+			Vendor:      "greenhouse",
+			Company:     company,
+			Id:          strconv.FormatInt(j.Id, 10),
+			Title:       j.Title,
+			Location:    j.Location.Name,
+			Url:         j.AbsoluteUrl,
+			Description: plainText(j.Content),
 		})
 	}
 	return postings, nil
@@ -96,10 +100,11 @@ func fetchGreenhouse(company string) ([]Posting, error) {
 // decodes into a slice directly. Title lives under "text" and location is
 // nested inside "categories".
 type leverJob struct {
-	Id         string `json:"id"`
-	Text       string `json:"text"`
-	HostedUrl  string `json:"hostedUrl"`
-	Categories struct {
+	Id               string `json:"id"`
+	Text             string `json:"text"`
+	HostedUrl        string `json:"hostedUrl"`
+	DescriptionPlain string `json:"descriptionPlain"`
+	Categories       struct {
 		Location string `json:"location"`
 	} `json:"categories"`
 }
@@ -115,12 +120,13 @@ func fetchLever(company string) ([]Posting, error) {
 	postings := make([]Posting, 0, len(jobs))
 	for _, j := range jobs {
 		postings = append(postings, Posting{
-			Vendor:   "lever",
-			Company:  company,
-			Id:       j.Id,
-			Title:    j.Text,
-			Location: j.Categories.Location,
-			Url:      j.HostedUrl,
+			Vendor:      "lever",
+			Company:     company,
+			Id:          j.Id,
+			Title:       j.Text,
+			Location:    j.Categories.Location,
+			Url:         j.HostedUrl,
+			Description: j.DescriptionPlain,
 		})
 	}
 	return postings, nil

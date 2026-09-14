@@ -4,7 +4,8 @@
       "id": "job-123",
       "title": "Software Engineer Intern",
       "location": "Remote",
-      "jobUrl": "https://example.com/jobs/job-123"
+      "jobUrl": "https://example.com/jobs/job-123",
+      "descriptionPlain": "Candidates must be able to work without current or future sponsorship."
     }
   ]
 }

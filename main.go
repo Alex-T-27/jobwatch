@@ -21,12 +21,13 @@ type Data struct {
 // Posting is the one shape the rest of the program works in. Vendor JSON is
 // converted into this inside vendors.go and nowhere else.
 type Posting struct {
-	Vendor   string
-	Company  string
-	Id       string
-	Title    string
-	Location string
-	Url      string
+	Vendor      string
+	Company     string
+	Id          string
+	Title       string
+	Location    string
+	Url         string
+	Description string
 }
 
 // Key namespaces an id by where it came from. Two Greenhouse companies can hand
@@ -53,11 +54,20 @@ const maxPerRun = 5
 const pollInterval = time.Minute
 
 func formatPosting(p Posting) string {
-	//Message content
-	message := fmt.Sprintf("***New Job Found*** \n**%s - %s**\n%s\n%s",
+	assessment := assessSponsorship(p.Description)
+	sponsorship := "❓ **Sponsorship:** unknown"
+	if assessment.LikelyBlocked {
+		sponsorship = fmt.Sprintf(
+			"⚠️ **Sponsorship risk:** likely blocked\n**Reason:** %s",
+			assessment.Reason,
+		)
+	}
+
+	message := fmt.Sprintf("***New Job Found*** \n**%s - %s**\n%s\n%s\n%s",
 		p.Title,
 		p.Company,
 		p.Location,
+		sponsorship,
 		p.Url,
 	)
 	return message
