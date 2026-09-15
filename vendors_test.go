@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"testing"
 )
 
@@ -37,6 +38,7 @@ func TestFetchAshby(t *testing.T) {
 		Id:             "job-123",
 		Title:          "Software Engineer Intern",
 		Location:       "Remote",
+		Locations:      []postingLocation{{Name: "Remote"}},
 		Url:            "https://example.com/jobs/job-123",
 		Description:    "Candidates will build backend services. They must be able to work without current or future sponsorship.",
 		Department:     "Engineering",
@@ -44,7 +46,7 @@ func TestFetchAshby(t *testing.T) {
 		EmploymentType: "Intern",
 	}
 
-	if postings[0] != want {
+	if !reflect.DeepEqual(postings[0], want) {
 		t.Errorf("got %+v, want %+v", postings[0], want)
 	}
 }

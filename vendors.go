@@ -25,6 +25,17 @@ type ashbyJob struct {
 	Department       string `json:"department"`
 	Team             string `json:"team"`
 	EmploymentType   string `json:"employmentType"`
+	Address          struct {
+		PostalAddress struct {
+			Country string `json:"addressCountry"`
+		} `json:"postalAddress"`
+	} `json:"address"`
+	SecondaryLocations []struct {
+		Location string `json:"location"`
+		Address  struct {
+			Country string `json:"addressCountry"`
+		} `json:"address"`
+	} `json:"secondaryLocations"`
 }
 
 func fetchAshby(company string) ([]Posting, error) {
@@ -44,12 +55,17 @@ func fetchAshbyFromURL(company, url string) ([]Posting, error) {
 
 	postings := make([]Posting, 0, len(board.Jobs))
 	for _, j := range board.Jobs {
+		locations := []postingLocation{{Name: j.Location, Country: j.Address.PostalAddress.Country}}
+		for _, secondary := range j.SecondaryLocations {
+			locations = append(locations, postingLocation{Name: secondary.Location, Country: secondary.Address.Country})
+		}
 		postings = append(postings, Posting{
 			Vendor:         "ashby",
 			Company:        company,
 			Id:             j.Id,
 			Title:          j.Title,
 			Location:       j.Location,
+			Locations:      locations,
 			Url:            j.JobUrl,
 			Description:    j.DescriptionPlain,
 			Department:     j.Department,
@@ -79,6 +95,9 @@ type greenhouseJob struct {
 		Name string `json:"name"`
 	} `json:"location"`
 	AbsoluteUrl string `json:"absolute_url"`
+	Offices     []struct {
+		Location string `json:"location"`
+	} `json:"offices"`
 }
 
 func fetchGreenhouse(company string) ([]Posting, error) {
@@ -95,6 +114,12 @@ func fetchGreenhouse(company string) ([]Posting, error) {
 		for _, department := range j.Departments {
 			departments = append(departments, department.Name)
 		}
+		locations := []postingLocation{{Name: j.Location.Name}}
+		for _, office := range j.Offices {
+			if office.Location != "" {
+				locations = append(locations, postingLocation{Name: office.Location})
+			}
+		}
 
 		postings = append(postings, Posting{
 			Vendor:      "greenhouse",
@@ -102,6 +127,7 @@ func fetchGreenhouse(company string) ([]Posting, error) {
 			Id:          strconv.FormatInt(j.Id, 10),
 			Title:       j.Title,
 			Location:    j.Location.Name,
+			Locations:   locations,
 			Url:         j.AbsoluteUrl,
 			Description: plainText(j.Content),
 			Department:  strings.Join(departments, ", "),
@@ -121,15 +147,17 @@ type leverJob struct {
 	HostedUrl        string `json:"hostedUrl"`
 	DescriptionPlain string `json:"descriptionPlain"`
 	AdditionalPlain  string `json:"additionalPlain"`
+	Country          string `json:"country"`
 	Lists            []struct {
 		Text    string `json:"text"`
 		Content string `json:"content"`
 	} `json:"lists"`
 	Categories struct {
-		Location   string `json:"location"`
-		Team       string `json:"team"`
-		Department string `json:"department"`
-		Commitment string `json:"commitment"`
+		Location     string   `json:"location"`
+		Team         string   `json:"team"`
+		Department   string   `json:"department"`
+		Commitment   string   `json:"commitment"`
+		AllLocations []string `json:"allLocations"`
 	} `json:"categories"`
 }
 
@@ -143,6 +171,12 @@ func fetchLever(company string) ([]Posting, error) {
 
 	postings := make([]Posting, 0, len(jobs))
 	for _, j := range jobs {
+		locations := []postingLocation{{Name: j.Categories.Location, Country: j.Country}}
+		for _, name := range j.Categories.AllLocations {
+			if name != j.Categories.Location {
+				locations = append(locations, postingLocation{Name: name})
+			}
+		}
 		// Lever keeps responsibilities and requirements outside descriptionPlain.
 		parts := []string{j.DescriptionPlain}
 		for _, section := range j.Lists {
@@ -155,6 +189,7 @@ func fetchLever(company string) ([]Posting, error) {
 			Id:             j.Id,
 			Title:          j.Text,
 			Location:       j.Categories.Location,
+			Locations:      locations,
 			Url:            j.HostedUrl,
 			Description:    strings.Join(parts, "\n"),
 			Department:     j.Categories.Department,

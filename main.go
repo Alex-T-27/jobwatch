@@ -26,6 +26,7 @@ type Posting struct {
 	Id             string
 	Title          string
 	Location       string
+	Locations      []postingLocation
 	Url            string
 	Description    string
 	Department     string
@@ -57,6 +58,11 @@ const maxPerRun = 5
 const pollInterval = time.Minute
 
 func formatPosting(p Posting, role roleAssessment) string {
+	location := assessLocation(p)
+	locationLabel := "US option available"
+	if location.Decision == locationReview {
+		locationLabel = "REVIEW: US availability unclear"
+	}
 	assessment := assessSponsorship(p.Description)
 	sponsorship := "❓ **Sponsorship:** unknown"
 	if assessment.LikelyBlocked {
@@ -71,10 +77,12 @@ func formatPosting(p Posting, role roleAssessment) string {
 		roleLabel = "🔎 **Role match:** review"
 	}
 
-	message := fmt.Sprintf("***New Job Found*** \n**%s - %s**\n%s\n%s\n**Role evidence:** %s\n%s\n%s",
+	message := fmt.Sprintf("***New Job Found*** \n**%s - %s**\n%s\n**Location:** %s\n**Location evidence:** %s\n%s\n**Role evidence:** %s\n%s\n%s",
 		p.Title,
 		p.Company,
 		p.Location,
+		locationLabel,
+		location.Reason,
 		roleLabel,
 		role.Reason,
 		sponsorship,
@@ -156,6 +164,8 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File, dryRun bo
 	internshipMatches := 0
 	softwareMatches := 0
 	reviewMatches := 0
+	locationSkipped := 0
+	locationReviews := 0
 	sentThisRun := 0
 	stopped := false
 
@@ -176,6 +186,18 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File, dryRun bo
 			softwareMatches++
 		} else {
 			reviewMatches++
+		}
+
+		location := assessLocation(p)
+		if dryRun {
+			fmt.Printf("  location [%s]: %s\n", location.Decision, location.Reason)
+		}
+		if location.Decision == locationIgnore {
+			locationSkipped++
+			continue
+		}
+		if location.Decision == locationReview {
+			locationReviews++
 		}
 
 		key := p.Key()
@@ -213,6 +235,6 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File, dryRun bo
 		sentThisRun++
 	}
 
-	fmt.Printf("fetched %d, internship matches %d, software matches %d, review %d, new %d, sent this run %d, left %d\n",
-		len(postings), internshipMatches, softwareMatches, reviewMatches, newFound, sentThisRun, newFound-sentThisRun)
+	fmt.Printf("fetched %d, internship matches %d, software matches %d, role review %d, outside US %d, location review %d, new %d, sent this run %d, left %d\n",
+		len(postings), internshipMatches, softwareMatches, reviewMatches, locationSkipped, locationReviews, newFound, sentThisRun, newFound-sentThisRun)
 }
