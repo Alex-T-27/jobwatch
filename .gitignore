@@ -8,6 +8,8 @@
 
 /job-tracker
 /sent.txt
+/scan-state.json
+/.scan-state-*
 /docs/
 /AGENTS.md
 /PROPOSAL.md

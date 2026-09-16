@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -54,7 +55,7 @@ const targetsPath = "companies.json"
 // every posting as new, from firing hundreds of messages at Discord at once.
 const maxPerRun = 5
 
-// How often a running JobWatch process checks every configured board.
+// Pause after a complete sweep, not after each batch.
 const pollInterval = time.Minute
 
 func formatPosting(p Posting, role roleAssessment) string {
@@ -93,7 +94,7 @@ func formatPosting(p Posting, role roleAssessment) string {
 
 func main() {
 	once := flag.Bool("once", false, "check boards once and exit")
-	dryRun := flag.Bool("dry-run", false, "preview one cycle without sending or recording jobs")
+	dryRun := flag.Bool("dry-run", false, "preview one cycle without sending alerts or changing scan history")
 	flag.Parse()
 	if !*dryRun {
 		if err := godotenv.Load(); err != nil {
@@ -110,6 +111,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	scans, err := loadScanState(scanPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	scanner := &scanner{state: scans, path: scanPath}
 
 	var sentLog *os.File
 	if !*dryRun {
@@ -130,7 +136,13 @@ func main() {
 	// Check immediately on startup, then keep checking until the process is
 	// asked to stop. A single loop prevents two polling runs from overlapping.
 	for {
-		runOnce(targets, sent, sentLog, *dryRun)
+		if err := runOnce(ctx, scanner, targets, sent, sentLog, *dryRun); err != nil {
+			if errors.Is(err, context.Canceled) {
+				log.Print("shutdown requested, exiting")
+				return
+			}
+			log.Fatal(err)
+		}
 		if *once || *dryRun || ctx.Err() != nil {
 			return
 		}
@@ -147,19 +159,32 @@ func main() {
 	}
 }
 
-func runOnce(targets []target, sent map[string]bool, sentLog *os.File, dryRun bool) {
-	// One board failing should not cost us the other two.
-	var postings []Posting
-	for _, t := range targets {
-		got, err := fetchJobs(t.Vendor, t.Company)
+func runOnce(ctx context.Context, scanner *scanner, targets []target, sent map[string]bool, sentLog *os.File, dryRun bool) error {
+	budget := &deliveryBudget{}
+	for start := 0; start < len(targets); start += scanBatchSize {
+		end := min(start+scanBatchSize, len(targets))
+		postings, reports, err := scanner.scanBatch(ctx, targets[start:end], dryRun)
 		if err != nil {
-			log.Printf("%s/%s failed: %v", t.Vendor, t.Company, err)
-			continue
+			return err
 		}
-		fmt.Printf("%-11s %-10s %4d postings\n", t.Vendor, t.Company, len(got))
-		postings = append(postings, got...)
+		fmt.Printf("\nBatch %d/%d: companies %d-%d\n", start/scanBatchSize+1, (len(targets)+scanBatchSize-1)/scanBatchSize, start+1, end)
+		for _, report := range reports {
+			fmt.Println(formatBoardReport(report))
+		}
+		if err := deliverPostings(ctx, postings, sent, sentLog, dryRun, budget); err != nil {
+			return err
+		}
 	}
+	return nil
+}
 
+// The send cap applies to a whole sweep. More batches must not multiply it.
+type deliveryBudget struct {
+	sent    int
+	stopped bool
+}
+
+func deliverPostings(ctx context.Context, postings []Posting, sent map[string]bool, sentLog *os.File, dryRun bool, budget *deliveryBudget) error {
 	newFound := 0
 	internshipMatches := 0
 	softwareMatches := 0
@@ -167,9 +192,11 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File, dryRun bo
 	locationSkipped := 0
 	locationReviews := 0
 	sentThisRun := 0
-	stopped := false
 
 	for _, p := range postings {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if !isInternship(p) {
 			continue
 		}
@@ -210,31 +237,39 @@ func runOnce(targets []target, sent map[string]bool, sentLog *os.File, dryRun bo
 		}
 
 		// Keep counting the rest so the summary is honest, but send no more.
-		if stopped || sentThisRun >= maxPerRun {
+		if budget.stopped || budget.sent >= maxPerRun {
 			continue
 		}
 
 		// Placeholder, not real rate limiting. Discord allows roughly five
 		// messages per five seconds per channel. Backoff comes later.
-		if sentThisRun > 0 {
-			time.Sleep(time.Second)
+		if budget.sent > 0 {
+			timer := time.NewTimer(time.Second)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				return ctx.Err()
+			}
 		}
 
 		if err := sendToDiscord(formatPosting(p, role)); err != nil {
 			log.Printf("send failed on %s, stopping this run: %v", key, err)
-			stopped = true
+			budget.stopped = true
 			continue
 		}
 
 		// Record the key only after the send succeeded. Crashing between the
 		// two means this posting sends twice next run, which beats losing it.
 		if err := markSent(sentLog, key); err != nil {
-			log.Fatalf("sent %s but could not record it: %v", key, err)
+			return fmt.Errorf("sent %s but could not record it: %w", key, err)
 		}
 		sent[key] = true
 		sentThisRun++
+		budget.sent++
 	}
 
-	fmt.Printf("fetched %d, internship matches %d, software matches %d, role review %d, outside US %d, location review %d, new %d, sent this run %d, left %d\n",
+	fmt.Printf("fetched %d, internship matches %d, software matches %d, role review %d, outside US %d, location review %d, pending alerts %d, sent this batch %d, left %d\n",
 		len(postings), internshipMatches, softwareMatches, reviewMatches, locationSkipped, locationReviews, newFound, sentThisRun, newFound-sentThisRun)
+	return nil
 }

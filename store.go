@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -48,4 +50,52 @@ func openSentLog(path string) (*os.File, error) {
 func markSent(f *os.File, id string) error {
 	_, err := fmt.Fprintln(f, id)
 	return err
+}
+
+func loadScanState(path string) (scanState, error) {
+	body, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return make(scanState), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var state scanState
+	if err := json.Unmarshal(body, &state); err != nil {
+		return nil, fmt.Errorf("decode scan history %q: %w", path, err)
+	}
+	if state == nil {
+		return nil, fmt.Errorf("scan history %q must be an object", path)
+	}
+	for key, snapshot := range state {
+		if snapshot.CheckedAt.IsZero() || snapshot.Keys == nil {
+			return nil, fmt.Errorf("invalid scan snapshot for %q", key)
+		}
+	}
+	return state, nil
+}
+
+// Replace the snapshot atomically so an interrupted write leaves the previous
+// complete history intact. The temporary file must be on the same filesystem.
+func saveScanState(path string, state scanState) error {
+	body, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	file, err := os.CreateTemp(filepath.Dir(path), ".scan-state-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	defer file.Close()
+	if _, err := file.Write(body); err != nil {
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), path)
 }

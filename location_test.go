@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -114,7 +115,10 @@ func TestLocationFilterBeforeDelivery(t *testing.T) {
 	}
 	defer log.Close()
 	sent := make(map[string]bool)
-	runOnce([]target{{Vendor: "lever", Company: "fixture"}}, sent, log, false)
+	scanner := &scanner{state: make(scanState), path: filepath.Join(t.TempDir(), "scan-state.json")}
+	if err := runOnce(context.Background(), scanner, []target{{Vendor: "lever", Company: "fixture"}}, sent, log, false); err != nil {
+		t.Fatal(err)
+	}
 	if posts != 1 || len(sent) != 1 || !sent["lever:fixture:unclear"] {
 		t.Fatalf("wrong delivery or state: posts=%d sent=%v", posts, sent)
 	}

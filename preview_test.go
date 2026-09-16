@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -41,7 +42,13 @@ func TestLeverDescriptionAndDryRun(t *testing.T) {
 	}
 	sent := make(map[string]bool)
 	// A nil log also ensures the preview cannot record a send.
-	runOnce([]target{{Vendor: "lever", Company: "fixture"}}, sent, nil, true)
+	scanner := &scanner{state: make(scanState), path: "must-not-be-written"}
+	if err := runOnce(context.Background(), scanner, []target{{Vendor: "lever", Company: "fixture"}}, sent, nil, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(scanner.state) != 0 {
+		t.Fatal("preview changed scan history")
+	}
 	if len(sent) != 0 {
 		t.Fatal("preview changed sent state")
 	}
