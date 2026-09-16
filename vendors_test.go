@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -23,7 +24,7 @@ func TestFetchAshby(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	postings, err := fetchAshbyFromURL("Deepgram", server.URL)
+	postings, err := fetchAshbyFromURL(context.Background(), "Deepgram", server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}

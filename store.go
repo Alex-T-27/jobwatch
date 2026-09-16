@@ -78,17 +78,30 @@ func loadScanState(path string) (scanState, error) {
 // Replace the snapshot atomically so an interrupted write leaves the previous
 // complete history intact. The temporary file must be on the same filesystem.
 func saveScanState(path string, state scanState) error {
-	body, err := json.MarshalIndent(state, "", "  ")
+	return saveJSONAtomic(path, state)
+}
+
+func saveJSONAtomic(path string, value any) error {
+	body, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
-	file, err := os.CreateTemp(filepath.Dir(path), ".scan-state-*")
+	mode := os.FileMode(0600)
+	if info, err := os.Stat(path); err == nil {
+		mode = info.Mode().Perm()
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	file, err := os.CreateTemp(filepath.Dir(path), ".jobwatch-state-*")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(file.Name())
 	defer file.Close()
-	if _, err := file.Write(body); err != nil {
+	if err := file.Chmod(mode); err != nil {
+		return err
+	}
+	if _, err := file.Write(append(body, '\n')); err != nil {
 		return err
 	}
 	if err := file.Sync(); err != nil {

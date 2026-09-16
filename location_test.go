@@ -74,7 +74,7 @@ func TestVendorLocations(t *testing.T) {
 			client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 				return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(tt.body))}, nil
 			})}
-			postings, err := fetchJobs(tt.vendor, "fixture")
+			postings, err := fetchJobs(context.Background(), tt.vendor, "fixture")
 			if err != nil {
 				t.Fatal(err)
 			}

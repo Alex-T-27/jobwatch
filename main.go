@@ -94,12 +94,27 @@ func formatPosting(p Posting, role roleAssessment) string {
 
 func main() {
 	once := flag.Bool("once", false, "check boards once and exit")
-	dryRun := flag.Bool("dry-run", false, "preview one cycle without sending alerts or changing scan history")
+	dryRun := flag.Bool("dry-run", false, "preview without sending alerts or changing any files")
+	discoverOnly := flag.Bool("discover-only", false, "discover company boards and exit without sending alerts")
+	noDiscovery := flag.Bool("no-discovery", false, "scan only configured companies without searching for new boards")
 	flag.Parse()
-	if !*dryRun {
+	if *discoverOnly && *noDiscovery {
+		log.Fatal("-discover-only and -no-discovery cannot be combined")
+	}
+	if !*dryRun && !*discoverOnly {
 		if err := godotenv.Load(); err != nil {
 			log.Fatal(err)
 		}
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if *discoverOnly {
+		_, report, err := discoverCompanies(ctx, targetsPath, *dryRun)
+		if err != nil {
+			log.Fatal(err)
+		}
+		printDiscoveryReport(report, *dryRun)
+		return
 	}
 
 	targets, err := loadTargets(targetsPath)
@@ -126,16 +141,25 @@ func main() {
 		defer sentLog.Close()
 	}
 
-	ctx, stop := signal.NotifyContext(
-		context.Background(),
-		os.Interrupt,
-		syscall.SIGTERM,
-	)
-	defer stop()
-
 	// Check immediately on startup, then keep checking until the process is
 	// asked to stop. A single loop prevents two polling runs from overlapping.
+	var nextDiscovery time.Time
 	for {
+		if refreshed, err := loadTargets(targetsPath); err != nil {
+			log.Printf("company config reload failed, keeping current boards: %v", err)
+		} else {
+			targets = refreshed
+		}
+		if !*noDiscovery && discoveryDue(time.Now(), nextDiscovery) {
+			refreshed, report, err := discoverCompanies(ctx, targetsPath, *dryRun)
+			nextDiscovery = time.Now().Add(discoveryInterval)
+			if err != nil {
+				log.Printf("discovery failed, keeping current boards: %v", err)
+			} else {
+				targets = refreshed
+				printDiscoveryReport(report, *dryRun)
+			}
+		}
 		if err := runOnce(ctx, scanner, targets, sent, sentLog, *dryRun); err != nil {
 			if errors.Is(err, context.Canceled) {
 				log.Print("shutdown requested, exiting")

@@ -71,7 +71,7 @@ func (s *scanner) scanBatch(ctx context.Context, targets []target, dryRun bool) 
 		if err := ctx.Err(); err != nil {
 			return nil, nil, err
 		}
-		jobs, err := fetchJobs(t.Vendor, t.Company)
+		jobs, err := fetchJobs(ctx, t.Vendor, t.Company)
 		if err != nil {
 			log.Printf("%s/%s failed: %v", t.Vendor, t.Company, err)
 			reports = append(reports, boardReport{Target: t, Err: err})

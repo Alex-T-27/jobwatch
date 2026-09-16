@@ -10,6 +10,7 @@
 /sent.txt
 /scan-state.json
 /.scan-state-*
+/.jobwatch-state-*
 /docs/
 /AGENTS.md
 /PROPOSAL.md

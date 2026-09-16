@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -24,12 +25,12 @@ func TestConditionalFetchRetainsUnsentJobs(t *testing.T) {
 	defer server.Close()
 	defer delete(boardsByURL, server.URL)
 
-	first, err := fetchAshbyFromURL("example", server.URL)
+	first, err := fetchAshbyFromURL(context.Background(), "example", server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sent := map[string]bool{first[0].Key(): true}
-	second, err := fetchAshbyFromURL("example", server.URL)
+	second, err := fetchAshbyFromURL(context.Background(), "example", server.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +54,7 @@ func TestConditionalFetchClearsOldValidator(t *testing.T) {
 	defer server.Close()
 	defer delete(boardsByURL, server.URL)
 	for range 3 {
-		if _, err := fetchAshbyFromURL("example", server.URL); err != nil {
+		if _, err := fetchAshbyFromURL(context.Background(), "example", server.URL); err != nil {
 			t.Fatal(err)
 		}
 	}

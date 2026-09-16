@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -20,14 +21,14 @@ var boardsByURL = make(map[string]cachedBoard)
 // fetchJobs picks the adapter for a vendor and hands back postings that are
 // already normalized. Adding a vendor means one case here plus one pair of
 // struct and function in vendors.go. Nothing else in the program changes.
-func fetchJobs(vendor, company string) ([]Posting, error) {
+func fetchJobs(ctx context.Context, vendor, company string) ([]Posting, error) {
 	switch vendor {
 	case "ashby":
-		return fetchAshby(company)
+		return fetchAshby(ctx, company)
 	case "greenhouse":
-		return fetchGreenhouse(company)
+		return fetchGreenhouse(ctx, company)
 	case "lever":
-		return fetchLever(company)
+		return fetchLever(ctx, company)
 	}
 	return nil, fmt.Errorf("unknown vendor %q", vendor)
 }
@@ -36,11 +37,12 @@ func fetchJobs(vendor, company string) ([]Posting, error) {
 // which must be a pointer. Every adapter shares this so none of them repeat the
 // HTTP boilerplate. The body is read before the status check so a failure can
 // report what the server actually said.
-func getJSON(url string, target any) error {
-	req, err := http.NewRequest("GET", url, nil)
+func getJSON(ctx context.Context, url string, target any) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return err
 	}
+	req.Header.Set("User-Agent", "JobWatch/1.0 (+https://github.com/Alex-T-27/jobwatch)")
 	if etag := boardsByURL[url].etag; etag != "" {
 		req.Header.Set("If-None-Match", etag)
 	}
@@ -65,7 +67,7 @@ func getJSON(url string, target any) error {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s returned %s: %s", url, resp.Status, body)
+		return &httpStatusError{Code: resp.StatusCode, Message: fmt.Sprintf("%s returned %s: %.500s", url, resp.Status, body)}
 	}
 
 	if err := json.Unmarshal(body, target); err != nil {
@@ -78,3 +80,11 @@ func getJSON(url string, target any) error {
 
 	return nil
 }
+
+// Callers can stop on throttling without guessing from an error message.
+type httpStatusError struct {
+	Code    int
+	Message string
+}
+
+func (e *httpStatusError) Error() string { return e.Message }

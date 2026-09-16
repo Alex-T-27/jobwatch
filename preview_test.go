@@ -26,7 +26,7 @@ func TestLeverDescriptionAndDryRun(t *testing.T) {
 			Body:       io.NopCloser(strings.NewReader(`[{"id":"fixture", "text":"Technology Analyst", "descriptionPlain":"This role is an internship.", "categories":{"department":"Engineering"}, "lists":[{"text":"Responsibilities", "content":"<ul><li>Build backend services.</li></ul>"}], "additionalPlain":"We are unable to provide visa sponsorship."}]`)),
 		}, nil
 	})}
-	postings, err := fetchLever("fixture")
+	postings, err := fetchLever(context.Background(), "fixture")
 	if err != nil {
 		t.Fatal(err)
 	}

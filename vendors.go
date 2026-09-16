@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -38,18 +39,18 @@ type ashbyJob struct {
 	} `json:"secondaryLocations"`
 }
 
-func fetchAshby(company string) ([]Posting, error) {
+func fetchAshby(ctx context.Context, company string) ([]Posting, error) {
 	url := fmt.Sprintf(
 		"https://api.ashbyhq.com/posting-api/job-board/%s",
 		company,
 	)
 
-	return fetchAshbyFromURL(company, url)
+	return fetchAshbyFromURL(ctx, company, url)
 }
 
-func fetchAshbyFromURL(company, url string) ([]Posting, error) {
+func fetchAshbyFromURL(ctx context.Context, company, url string) ([]Posting, error) {
 	var board ashbyBoard
-	if err := getJSON(url, &board); err != nil {
+	if err := getJSON(ctx, url, &board); err != nil {
 		return nil, err
 	}
 
@@ -100,11 +101,11 @@ type greenhouseJob struct {
 	} `json:"offices"`
 }
 
-func fetchGreenhouse(company string) ([]Posting, error) {
+func fetchGreenhouse(ctx context.Context, company string) ([]Posting, error) {
 	url := fmt.Sprintf("https://boards-api.greenhouse.io/v1/boards/%s/jobs?content=true", company)
 
 	var board greenhouseBoard
-	if err := getJSON(url, &board); err != nil {
+	if err := getJSON(ctx, url, &board); err != nil {
 		return nil, err
 	}
 
@@ -161,11 +162,11 @@ type leverJob struct {
 	} `json:"categories"`
 }
 
-func fetchLever(company string) ([]Posting, error) {
+func fetchLever(ctx context.Context, company string) ([]Posting, error) {
 	url := fmt.Sprintf("https://api.lever.co/v0/postings/%s?mode=json", company)
 
 	var jobs []leverJob
-	if err := getJSON(url, &jobs); err != nil {
+	if err := getJSON(ctx, url, &jobs); err != nil {
 		return nil, err
 	}
 
