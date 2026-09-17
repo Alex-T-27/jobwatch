@@ -124,7 +124,9 @@ func assessRole(p Posting) roleAssessment {
 		return roleAssessment{Decision: roleReview, Reason: "software work appears only in the JD: " + jdEvidence}
 	}
 
-	return roleAssessment{Decision: roleReview, Reason: "internship title is too vague to classify safely"}
+	// Review needs a positive signal; an internship label alone would send
+	// unrelated roles such as brand design and trading into the alert queue.
+	return roleAssessment{Decision: roleIgnore, Reason: "no software evidence in title, metadata, or JD"}
 }
 
 type sponsorshipAssessment struct {

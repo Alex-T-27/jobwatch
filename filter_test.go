@@ -42,11 +42,36 @@ func TestAssessRole(t *testing.T) {
 			want: roleReview,
 		},
 		{
-			name: "vague internship goes to review",
+			name: "vague internship without software evidence is skipped",
 			posting: Posting{
 				Title: "Summer Intern",
 			},
-			want: roleReview,
+			want: roleIgnore,
+		},
+		{
+			name:    "brand design internship without software evidence",
+			posting: Posting{Title: "Brand Design Intern (Summer 2027)", Department: "Design", Description: "Create illustrations and brand campaigns."},
+			want:    roleIgnore,
+		},
+		{
+			name:    "trading internship without software evidence",
+			posting: Posting{Title: "Quantitative Trading Intern - Summer 2027", Department: "Trading", Description: "Analyze market trends and trading strategies."},
+			want:    roleIgnore,
+		},
+		{
+			name:    "generic software mention is not a coding duty",
+			posting: Posting{Title: "Summer Intern", Description: "Use our software to organize events."},
+			want:    roleIgnore,
+		},
+		{
+			name:    "vague internship with engineering metadata still needs review",
+			posting: Posting{Title: "Summer Intern", Department: "Engineering"},
+			want:    roleReview,
+		},
+		{
+			name:    "trading title with coding duties still needs review",
+			posting: Posting{Title: "Quantitative Trading Intern", Description: "You will build backend services for trading systems."},
+			want:    roleReview,
 		},
 		{
 			name:    "marketing internship",
