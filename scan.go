@@ -50,7 +50,8 @@ func compareBoard(t target, jobs []Posting, previous boardSnapshot, known bool) 
 		snapshot.Keys = append(snapshot.Keys, key)
 		if known && !old[key] {
 			report.NewJobs++
-			if assessRole(p).Decision != roleIgnore && assessLocation(p).Decision != locationIgnore && assessSeason(p).Decision != seasonIgnore {
+			if assessRole(p).Decision != roleIgnore && assessLocation(p).Decision != locationIgnore &&
+				assessSeason(p).Decision != seasonIgnore && assessEligibility(p.Description).Decision != eligibilityIgnore {
 				report.NewMatches++
 			}
 		}

@@ -69,14 +69,7 @@ func formatPosting(p Posting, role roleAssessment) string {
 	if location.Decision == locationReview {
 		locationLabel = "REVIEW: US availability unclear"
 	}
-	assessment := assessSponsorship(p.Description)
-	sponsorship := "❓ **Sponsorship:** unknown"
-	if assessment.LikelyBlocked {
-		sponsorship = fmt.Sprintf(
-			"⚠️ **Sponsorship risk:** likely blocked\n**Sponsorship reason:** %s",
-			assessment.Reason,
-		)
-	}
+	eligibility := formatEligibility(assessEligibility(p.Description))
 
 	roleLabel := "✅ **Role match:** software"
 	if role.Decision == roleReview {
@@ -93,7 +86,7 @@ func formatPosting(p Posting, role roleAssessment) string {
 		role.Reason,
 		seasonLabel,
 		season.Reason,
-		sponsorship,
+		eligibility,
 		p.Url,
 	)
 	return message
@@ -224,6 +217,7 @@ func deliverPostings(ctx context.Context, postings []Posting, sent map[string]bo
 	locationReviews := 0
 	seasonSkipped := 0
 	seasonReviews := 0
+	eligibilitySkipped := 0
 	sentThisRun := 0
 
 	for _, p := range postings {
@@ -272,6 +266,18 @@ func deliverPostings(ctx context.Context, postings []Posting, sent map[string]bo
 			seasonReviews++
 		}
 
+		eligibility := assessEligibility(p.Description)
+		if dryRun {
+			fmt.Printf("  eligibility [%s]: %s\n", eligibility.Decision, eligibility.Reason)
+			if eligibility.Evidence != "" {
+				fmt.Printf("  JD evidence: %s\n", eligibility.Evidence)
+			}
+		}
+		if eligibility.Decision == eligibilityIgnore {
+			eligibilitySkipped++
+			continue
+		}
+
 		key := p.Key()
 		if sent[key] {
 			continue
@@ -314,7 +320,7 @@ func deliverPostings(ctx context.Context, postings []Posting, sent map[string]bo
 		budget.sent++
 	}
 
-	fmt.Printf("fetched %d, internship matches %d, software matches %d, role review %d, outside US %d, location review %d, schedule skipped %d, schedule review %d, pending alerts %d, sent this batch %d, left %d\n",
-		len(postings), internshipMatches, softwareMatches, reviewMatches, locationSkipped, locationReviews, seasonSkipped, seasonReviews, newFound, sentThisRun, newFound-sentThisRun)
+	fmt.Printf("fetched %d, internship matches %d, software matches %d, role review %d, outside US %d, location review %d, schedule skipped %d, schedule review %d, eligibility skipped %d, pending alerts %d, sent this batch %d, left %d\n",
+		len(postings), internshipMatches, softwareMatches, reviewMatches, locationSkipped, locationReviews, seasonSkipped, seasonReviews, eligibilitySkipped, newFound, sentThisRun, newFound-sentThisRun)
 	return nil
 }

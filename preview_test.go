@@ -37,8 +37,8 @@ func TestLeverDescriptionAndDryRun(t *testing.T) {
 	if role := assessRole(p); role.Decision != roleMatch {
 		t.Fatalf("requirements missing from classifier: %+v", role)
 	}
-	if !assessSponsorship(p.Description).LikelyBlocked {
-		t.Fatal("closing section missing from sponsorship assessment")
+	if eligibility := assessEligibility(p.Description); eligibility.Decision != eligibilityReview || eligibility.Evidence != "We are unable to provide visa sponsorship." {
+		t.Fatalf("closing section missing from eligibility review: %+v", eligibility)
 	}
 	sent := make(map[string]bool)
 	// A nil log also ensures the preview cannot record a send.
