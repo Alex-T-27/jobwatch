@@ -71,6 +71,15 @@ func loadScanState(path string) (scanState, error) {
 		if snapshot.CheckedAt.IsZero() || snapshot.Keys == nil {
 			return nil, fmt.Errorf("invalid scan snapshot for %q", key)
 		}
+		keys := make(map[string]bool, len(snapshot.Keys))
+		for _, postingKey := range snapshot.Keys {
+			keys[postingKey] = true
+		}
+		for postingKey, discoveredAt := range snapshot.DiscoveredAt {
+			if !keys[postingKey] || discoveredAt.IsZero() {
+				return nil, fmt.Errorf("invalid discovery timestamp for %q in %q", postingKey, key)
+			}
+		}
 	}
 	return state, nil
 }

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAssessEligibility(t *testing.T) {
@@ -132,7 +133,7 @@ func TestEligibilityDeliveryAndUpdatedPosting(t *testing.T) {
 	review := blocked
 	review.Id, review.Description = "review", "We cannot provide visa sponsorship."
 	postings := []Posting{blocked, review}
-	report, snapshot := compareBoard(target{Vendor: "lever", Company: "fixture"}, postings, boardSnapshot{}, true)
+	report, snapshot := compareBoard(target{Vendor: "lever", Company: "fixture"}, postings, boardSnapshot{}, true, time.Now())
 	if report.NewJobs != 2 || report.NewMatches != 1 {
 		t.Fatalf("blocked job counted as eligible: %+v", report)
 	}
@@ -165,7 +166,7 @@ func TestEligibilityDeliveryAndUpdatedPosting(t *testing.T) {
 	// A revised JD has the same ID. Scan history must not stop its first alert.
 	blocked.Description = "U.S. citizenship is not required."
 	postings[0] = blocked
-	report, _ = compareBoard(target{Vendor: "lever", Company: "fixture"}, postings, snapshot, true)
+	report, _ = compareBoard(target{Vendor: "lever", Company: "fixture"}, postings, snapshot, true, time.Now())
 	if report.NewJobs != 0 {
 		t.Fatalf("a changed JD is not a new ID: %+v", report)
 	}

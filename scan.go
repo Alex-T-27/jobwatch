@@ -13,6 +13,8 @@ const scanPath = "scan-state.json"
 type boardSnapshot struct {
 	CheckedAt time.Time `json:"checked_at"`
 	Keys      []string  `json:"keys"`
+	// Missing entries are baseline jobs, including snapshots from older versions.
+	DiscoveredAt map[string]time.Time `json:"discovered_at,omitempty"`
 }
 
 type scanState map[string]boardSnapshot
@@ -33,9 +35,9 @@ type scanner struct {
 
 // Scan history answers what appeared, while sent.txt answers what was delivered.
 // Saving a scan must never prevent an unsent alert from being retried.
-func compareBoard(t target, jobs []Posting, previous boardSnapshot, known bool) (boardReport, boardSnapshot) {
+func compareBoard(t target, jobs []Posting, previous boardSnapshot, known bool, discoveredAt time.Time) (boardReport, boardSnapshot) {
 	report := boardReport{Target: t, Baseline: !known}
-	snapshot := boardSnapshot{CheckedAt: time.Now().UTC(), Keys: make([]string, 0, len(jobs))}
+	snapshot := boardSnapshot{CheckedAt: time.Now().UTC(), Keys: make([]string, 0, len(jobs)), DiscoveredAt: make(map[string]time.Time)}
 	old := make(map[string]bool, len(previous.Keys))
 	for _, key := range previous.Keys {
 		old[key] = true
@@ -48,7 +50,11 @@ func compareBoard(t target, jobs []Posting, previous boardSnapshot, known bool) 
 		}
 		current[key] = true
 		snapshot.Keys = append(snapshot.Keys, key)
+		if when, ok := previous.DiscoveredAt[key]; known && old[key] && ok {
+			snapshot.DiscoveredAt[key] = when
+		}
 		if known && !old[key] {
+			snapshot.DiscoveredAt[key] = discoveredAt
 			report.NewJobs++
 			if assessRole(p).Decision != roleIgnore && assessLocation(p).Decision != locationIgnore &&
 				assessSeason(p).Decision != seasonIgnore && assessEligibility(p.Description).Decision != eligibilityIgnore {
@@ -60,7 +66,7 @@ func compareBoard(t target, jobs []Posting, previous boardSnapshot, known bool) 
 	return report, snapshot
 }
 
-func (s *scanner) scanBatch(ctx context.Context, targets []target, dryRun bool) ([]Posting, []boardReport, error) {
+func (s *scanner) scanBatch(ctx context.Context, targets []target, dryRun bool, discoveredAt time.Time) ([]Posting, []boardReport, error) {
 	next := make(scanState, len(s.state)+len(targets))
 	for key, snapshot := range s.state {
 		next[key] = snapshot
@@ -80,10 +86,13 @@ func (s *scanner) scanBatch(ctx context.Context, targets []target, dryRun bool) 
 		}
 		key := t.Vendor + ":" + t.Company
 		previous, known := s.state[key]
-		report, snapshot := compareBoard(t, jobs, previous, known)
+		report, snapshot := compareBoard(t, jobs, previous, known, discoveredAt)
 		next[key] = snapshot
 		changed = true
 		reports = append(reports, report)
+		for i := range jobs {
+			jobs[i].DiscoveredAt = snapshot.DiscoveredAt[jobs[i].Key()]
+		}
 		postings = append(postings, jobs...)
 	}
 	if !dryRun && changed {

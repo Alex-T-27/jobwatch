@@ -33,6 +33,8 @@ type Posting struct {
 	Department     string
 	Team           string
 	EmploymentType string
+	// Set by the scanner, not the vendor. Zero means baseline/unknown age.
+	DiscoveredAt time.Time
 }
 
 // Key namespaces an id by where it came from. Two Greenhouse companies can hand
@@ -184,10 +186,13 @@ func main() {
 }
 
 func runOnce(ctx context.Context, scanner *scanner, targets []target, sent map[string]bool, sentLog *os.File, dryRun bool) error {
-	budget := &deliveryBudget{}
+	// One timestamp per sweep prevents scan order from making a later company's
+	// discoveries appear fresher than an earlier company's discoveries.
+	discoveredAt := time.Now().UTC()
+	var candidates []Posting
 	for start := 0; start < len(targets); start += scanBatchSize {
 		end := min(start+scanBatchSize, len(targets))
-		postings, reports, err := scanner.scanBatch(ctx, targets[start:end], dryRun)
+		postings, reports, err := scanner.scanBatch(ctx, targets[start:end], dryRun, discoveredAt)
 		if err != nil {
 			return err
 		}
@@ -195,11 +200,14 @@ func runOnce(ctx context.Context, scanner *scanner, targets []target, sent map[s
 		for _, report := range reports {
 			fmt.Println(formatBoardReport(report))
 		}
-		if err := deliverPostings(ctx, postings, sent, sentLog, dryRun, budget); err != nil {
-			return err
-		}
+		candidates = append(candidates, postings...)
 	}
-	return nil
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	prioritizePostings(candidates)
+	fmt.Println("\nDelivery: newest discoveries first, then existing backlog")
+	return deliverPostings(ctx, candidates, sent, sentLog, dryRun, &deliveryBudget{})
 }
 
 // The send cap applies to a whole sweep. More batches must not multiply it.
@@ -284,6 +292,13 @@ func deliverPostings(ctx context.Context, postings []Posting, sent map[string]bo
 		}
 		newFound++
 		if dryRun {
+			if newFound <= maxPerRun {
+				priority := "existing backlog / discovery time unknown"
+				if !p.DiscoveredAt.IsZero() {
+					priority = "discovered " + p.DiscoveredAt.Format(time.RFC3339)
+				}
+				fmt.Printf("  would send %d/%d: %s (%s)\n", newFound, maxPerRun, key, priority)
+			}
 			continue
 		}
 
@@ -320,7 +335,7 @@ func deliverPostings(ctx context.Context, postings []Posting, sent map[string]bo
 		budget.sent++
 	}
 
-	fmt.Printf("fetched %d, internship matches %d, software matches %d, role review %d, outside US %d, location review %d, schedule skipped %d, schedule review %d, eligibility skipped %d, pending alerts %d, sent this batch %d, left %d\n",
+	fmt.Printf("fetched %d, internship matches %d, software matches %d, role review %d, outside US %d, location review %d, schedule skipped %d, schedule review %d, eligibility skipped %d, pending alerts %d, sent this sweep %d, left %d\n",
 		len(postings), internshipMatches, softwareMatches, reviewMatches, locationSkipped, locationReviews, seasonSkipped, seasonReviews, eligibilitySkipped, newFound, sentThisRun, newFound-sentThisRun)
 	return nil
 }

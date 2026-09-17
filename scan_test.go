@@ -11,31 +11,32 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCompareBoard(t *testing.T) {
 	board := target{Vendor: "lever", Company: "fixture"}
 	job := Posting{Vendor: board.Vendor, Company: board.Company, Id: "1", Title: "Software Engineer Intern", Location: "US"}
-	baseline, previous := compareBoard(board, []Posting{job, job}, boardSnapshot{}, false)
+	baseline, previous := compareBoard(board, []Posting{job, job}, boardSnapshot{}, false, time.Now())
 	if !baseline.Baseline || baseline.NewJobs != 0 || baseline.Total != 1 {
 		t.Fatalf("first scan should establish a deduplicated baseline: %+v", baseline)
 	}
-	if report, _ := compareBoard(board, []Posting{job}, previous, true); report.NewJobs != 0 || report.Baseline {
+	if report, _ := compareBoard(board, []Posting{job}, previous, true, time.Now()); report.NewJobs != 0 || report.Baseline {
 		t.Fatalf("unchanged board: %+v", report)
 	}
 	added := job
 	added.Id = "2"
 	foreign := job
 	foreign.Id, foreign.Location = "3", "Canada"
-	report, _ := compareBoard(board, []Posting{job, added, added, foreign}, previous, true)
+	report, _ := compareBoard(board, []Posting{job, added, added, foreign}, previous, true, time.Now())
 	if report.NewJobs != 2 || report.NewMatches != 1 || report.Total != 3 {
 		t.Fatalf("new IDs and eligible new IDs must be counted separately: %+v", report)
 	}
-	empty, emptySnapshot := compareBoard(board, nil, previous, true)
+	empty, emptySnapshot := compareBoard(board, nil, previous, true, time.Now())
 	if empty.NewJobs != 0 || empty.Baseline || empty.Total != 0 || emptySnapshot.Keys == nil {
 		t.Fatalf("successful empty board: %+v %+v", empty, emptySnapshot)
 	}
-	reopened, _ := compareBoard(board, []Posting{job}, emptySnapshot, true)
+	reopened, _ := compareBoard(board, []Posting{job}, emptySnapshot, true, time.Now())
 	if reopened.NewJobs != 1 {
 		t.Fatal("a reappearing ID should count as newly listed since the previous scan")
 	}
@@ -61,7 +62,7 @@ func TestScanPersistenceFailureAndRecovery(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "scan-state.json")
 	s := &scanner{state: make(scanState), path: path}
 	targets := []target{{Vendor: "lever", Company: "fixture"}}
-	_, reports, err := s.scanBatch(context.Background(), targets, false)
+	_, reports, err := s.scanBatch(context.Background(), targets, false, time.Now())
 	if err != nil || !reports[0].Baseline {
 		t.Fatalf("baseline: %v %+v", err, reports)
 	}
@@ -76,7 +77,7 @@ func TestScanPersistenceFailureAndRecovery(t *testing.T) {
 	}
 	boardsByURL = make(map[string]cachedBoard)
 	status, body = 500, "temporary failure"
-	_, reports, err = s.scanBatch(context.Background(), targets, false)
+	_, reports, err = s.scanBatch(context.Background(), targets, false, time.Now())
 	if err != nil || reports[0].Err == nil {
 		t.Fatalf("failure must be reported, not presented as no change: %v %+v", err, reports)
 	}
@@ -85,7 +86,7 @@ func TestScanPersistenceFailureAndRecovery(t *testing.T) {
 		t.Fatal("failed scan changed the saved baseline")
 	}
 	status, body = 200, `[{"id":"old"},{"id":"new"}]`
-	_, reports, err = s.scanBatch(context.Background(), targets, true)
+	_, reports, err = s.scanBatch(context.Background(), targets, true, time.Now())
 	if err != nil || reports[0].NewJobs != 1 {
 		t.Fatalf("preview must compare against the saved history: %v %+v", err, reports)
 	}
@@ -93,12 +94,12 @@ func TestScanPersistenceFailureAndRecovery(t *testing.T) {
 	if err != nil || string(after) != string(saved) || len(s.state["lever:fixture"].Keys) != 1 {
 		t.Fatal("dry run changed scan history")
 	}
-	_, reports, err = s.scanBatch(context.Background(), targets, false)
+	_, reports, err = s.scanBatch(context.Background(), targets, false, time.Now())
 	if err != nil || reports[0].NewJobs != 1 || reports[0].Baseline {
 		t.Fatalf("recovery should compare with last successful scan: %v %+v", err, reports)
 	}
 	status, body = 304, ""
-	_, reports, err = s.scanBatch(context.Background(), targets, false)
+	_, reports, err = s.scanBatch(context.Background(), targets, false, time.Now())
 	if err != nil || reports[0].Err != nil || reports[0].NewJobs != 0 {
 		t.Fatalf("cached unchanged board: %v %+v", err, reports)
 	}
@@ -113,14 +114,14 @@ func TestScanBatchIsolationAndWriteFailure(t *testing.T) {
 	})
 	targets := []target{{Vendor: "lever", Company: "bad"}, {Vendor: "lever", Company: "good"}}
 	s := &scanner{state: make(scanState), path: filepath.Join(t.TempDir(), "scan-state.json")}
-	_, reports, err := s.scanBatch(context.Background(), targets, false)
+	_, reports, err := s.scanBatch(context.Background(), targets, false, time.Now())
 	if err != nil || len(reports) != 2 || reports[0].Err == nil || !reports[1].Baseline || len(s.state) != 1 {
 		t.Fatalf("one failed board must not stop the rest: %v %+v", err, reports)
 	}
 	previous := s.state
 	// A directory is not a replaceable snapshot file.
 	s.path = t.TempDir()
-	_, _, err = s.scanBatch(context.Background(), []target{{Vendor: "lever", Company: "other"}}, false)
+	_, _, err = s.scanBatch(context.Background(), []target{{Vendor: "lever", Company: "other"}}, false, time.Now())
 	if err == nil || !reflect.DeepEqual(previous, s.state) {
 		t.Fatal("failed persistence must not advance the in-memory scan history")
 	}
@@ -145,13 +146,13 @@ func TestBatchSweepCapAndUnsentBacklog(t *testing.T) {
 	gets, sends := 0, 0
 	useScanTransport(t, func(r *http.Request) (*http.Response, error) {
 		if r.Method == http.MethodPost {
+			if gets != (sends/maxPerRun+1)*16 {
+				t.Fatal("delivery started before every batch was scanned")
+			}
 			sends++
 			return scanResponse(200, "{}"), nil
 		}
 		gets++
-		if gets%16 == 0 && sends != (gets/16)*maxPerRun {
-			t.Fatal("the first batch was not processed before fetching the next batch")
-		}
 		return scanResponse(200, `[{"id":"intern","text":"Software Engineer Intern","categories":{"location":"US"}}]`), nil
 	})
 	var targets []target

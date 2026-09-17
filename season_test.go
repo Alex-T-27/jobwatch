@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestAssessSeason(t *testing.T) {
@@ -80,7 +81,7 @@ func TestSeasonFilteringDeliveryAndBoardReport(t *testing.T) {
 		{Vendor: "lever", Company: "fixture", Id: "review", Title: "Winter Software Engineer Intern", Location: "US"},
 		{Vendor: "lever", Company: "fixture", Id: "match", Title: "Summer Software Engineer Intern", Location: "US", EmploymentType: "FullTime"},
 	}
-	report, _ := compareBoard(target{Vendor: "lever", Company: "fixture"}, postings, boardSnapshot{}, true)
+	report, _ := compareBoard(target{Vendor: "lever", Company: "fixture"}, postings, boardSnapshot{}, true, time.Now())
 	if report.NewJobs != 3 || report.NewMatches != 2 {
 		t.Fatalf("schedule skips must not count as eligible matches: %+v", report)
 	}
